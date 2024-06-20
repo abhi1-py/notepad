@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Notepad-like Webpage</title>
+  <style>
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      margin: 0;
+      padding: 0;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+      background-color: #f9f9f9;
+    }
+
+    .notepad {
+      width: 80%;
+      max-width: 800px;
+      height: 80vh;
+      background-color: #ffffff;
+      border: 2px solid #ccc;
+      border-radius: 8px;
+      padding: 20px;
+      box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+      transition: box-shadow 0.3s ease;
+    }
+
+    .notepad:hover {
+      box-shadow: 0 8px 16px rgba(0, 0, 0, 0.2);
+    }
+
+    textarea {
+      width: 100%;
+      height: calc(100% - 100px);
+      border: 1px solid #ccc;
+      border-radius: 5px;
+      resize: both;
+      outline: none;
+      padding: 10px;
+      font-family: 'Courier New', Courier, monospace;
+      font-size: 16px;
+      line-height: 1.5;
+      transition: box-shadow 0.3s ease;
+    }
+
+    textarea:hover {
+      box-shadow: 0 0 8px rgba(0, 0, 0, 0.1);
+    }
+
+    button {
+      margin-right: 10px;
+      padding: 8px 16px;
+      font-size: 14px;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+      transition: background-color 0.3s ease;
+      background-color: #4caf50;
+      color: #ffffff;
+    }
+
+    button:hover {
+      background-color: #45a049;
+    }
+
+    select {
+      margin-right: 10px;
+      padding: 8px;
+      font-size: 14px;
+      border: 1px solid #ccc;
+      border-radius: 5px;
+    }
+
+    body.dark-mode {
+      background-color: #222;
+      color: #fff;
+    }
+
+    .notepad.dark-mode {
+      background-color: #333;
+      border-color: #555;
+      color: #fff;
+    }
+
+    .controls {
+      display: flex;
+      align-items: center;
+      margin-top: 10px;
+      color: #555;
+      font-size: 14px;
+    }
+
+    .controls > * {
+      margin-right: 10px;
+    }
+
+    .controls select {
+      padding: 6px;
+      border: 1px solid #ccc;
+      border-radius: 5px;
+      background-color: #f9f9f9;
+    }
+
+    #wordCount {
+      font-weight: bold;
+    }
+  </style>
+</head>
+<body>
+  <div class="notepad" id="notepad">
+    <textarea id="editor" placeholder="Start typing..." style="font-family: 'Courier New', Courier, monospace; font-size: 16px;"></textarea>
+    <div class="controls">
+      <span id="wordCount">Word count: 0</span>
+      <span>Font Style:</span>
+      <select id="fontStyle" onchange="changeFontStyle()">
+        <option value="Arial">Arial</option>
+        <option value="Times New Roman">Times New Roman</option>
+        <option value="Courier New">Courier New</option>
+        <option value="Verdana">Verdana</option>
+      </select>
+      <span>Font Size:</span>
+      <select id="fontSize" onchange="changeFontSize()">
+        <option value="12">12px</option>
+        <option value="14">14px</option>
+        <option value="16">16px</option>
+        <option value="18">18px</option>
+      </select>
+    </div>
+    <br>
+    <button onclick="saveAsPDF()">Save as PDF</button>
+    <button onclick="clearEditor()">Clear</button>
+    <button onclick="toggleDarkMode()">Toggle Dark Mode</button>
+  </div>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.16.0/pdf-lib.js"></script>
+  <script>
+    let content = document.getElementById('editor');
+    let wordCountElement = document.getElementById('wordCount');
+    let darkMode = false;
+
+    async function saveAsPDF() {
+      const textContent = content.value.trim();
+      if (!textContent) {
+        alert('No content to save.');
+        return;
+      }
+
+      const pdfDoc = await PDFLib.PDFDocument.create();
+      let page = pdfDoc.addPage();
+      const { width, height } = page.getSize();
+      const fontSize = 12;
+      const lineHeight = 14;
+      let y = height - 40;
+      const margin = 50;
+
+      const textLines = textContent.split(/\r?\n/);
+      for (const line of textLines) {
+        const words = line.split(' ');
+        let currentLine = '';
+
+        for (const word of words) {
+          const textWidth = pdfDoc.embedStandardFont(PDFLib.StandardFonts.Helvetica).widthOfTextAtSize(currentLine + word, fontSize);
+          if (textWidth < width - 2 * margin) {
+            currentLine += (currentLine ? ' ' : '') + word;
+          } else {
+            page.drawText(currentLine, { x: margin, y: y, size: fontSize });
+            y -= lineHeight;
+            currentLine = word;
+
+            if (y <= margin) {
+              page = pdfDoc.addPage();
+              y = height - 40;
+            }
+          }
+        }
+
+        page.drawText(currentLine, { x: margin, y: y, size: fontSize });
+        y -= lineHeight;
+
+        if (y <= margin) {
+          page = pdfDoc.addPage();
+          y = height - 40;
+        }
+      }
+
+      const pdfBytes = await pdfDoc.save();
+      const blob = new Blob([pdfBytes], { type: 'application/pdf' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'notepad_document.pdf';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    }
+
+    function clearEditor() {
+      content.value = '';
+      updateWordCount();
+    }
+
+    function changeFontStyle() {
+      const selectedFont = document.getElementById('fontStyle').value;
+      content.style.fontFamily = selectedFont;
+    }
+
+    function changeFontSize() {
+      const selectedSize = document.getElementById('fontSize').value;
+      content.style.fontSize = selectedSize + 'px';
+    }
+
+    function toggleDarkMode() {
+      darkMode = !darkMode;
+      const notepad = document.getElementById('notepad');
+      if (darkMode) {
+        notepad.classList.add('dark-mode');
+      } else {
+        notepad.classList.remove('dark-mode');
+      }
+    }
+
+    function updateWordCount() {
+      const text = content.value.trim();
+      const words = text.split(/\s+/).filter(word => word.length > 0);
+      wordCountElement.textContent = 'Word count: ' + words.length;
+    }
+
+    content.addEventListener('input', updateWordCount);
+  </script>
+</body>
+</html>
+
+
+
